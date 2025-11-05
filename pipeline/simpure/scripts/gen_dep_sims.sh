@@ -4,8 +4,8 @@ pix_type=hp
 nside=128
 res_arcmin=20
 smooth_fwhm=60
-n_sims=100
-id_sims_start=0
+n_sims=700
+id_sims_start=300
 out_dir=/home/matiasmv/SimonsObs/simpure_data/simpure_inputs/input_sims  #  YOUR OUTPUT DIR
 
 mkdir -p $out_dir
@@ -25,4 +25,4 @@ python ${bb_awg_scripts_dir}/pipeline/misc/get_tf_simulations.py \
     --id_sims_start $id_sims_start \
     --out_dir=$out_dir \
     --res_arcmin $res_arcmin \
-    --deprojection False
+    --deprojection True

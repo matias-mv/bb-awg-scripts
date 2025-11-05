@@ -1,15 +1,15 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.linalg import pinvh
-import pymaster as nmt
-import os
-import healpy as hp
-from pixell import enmap, utils
-import camb
+import numpy as np                          #type: ignore
+import matplotlib.pyplot as plt             #type: ignore
+from scipy.linalg import pinvh              #type: ignore
+import pymaster as nmt                      #type: ignore
+import os                                   #type: ignore
+import healpy as hp                         #type: ignore
+from pixell import enmap, utils             #type: ignore
+import camb                                 #type: ignore
 
-from soopercool import ps_utils as pu
-from soopercool import map_utils as mu
-from soopercool import coupling_utils as cu
+from soopercool import ps_utils as pu       #type: ignore
+from soopercool import map_utils as mu      #type: ignore
+from soopercool import coupling_utils as cu #type: ignore
 
 
 def get_theory_cls(cosmo_params, lmax, lmin=0, beam_fwhm=None):
@@ -91,7 +91,7 @@ def plot_transfer_function(lb, tf_dict, lmin, lmax, field_pairs, file_name):
 
 def get_inv_coupling(mask, nmt_bins, transfer=None, nmt_purify=False,
                      return_bp_win=False, wcs=None, lmax_mask=None,
-                     overwrite_coupling=False):
+                     overwrite_coupling=False, deprojection=False):
     """
     """
     tf_correct = transfer is not None
@@ -99,9 +99,10 @@ def get_inv_coupling(mask, nmt_bins, transfer=None, nmt_purify=False,
 
     pure_label = "_nmt_purify" if nmt_purify else ""
     tf_label = "_tf_correct" if tf_correct else ""
-    coupling_fname = f"{out_dir}/inv_coupling{tf_label}{pure_label}_{pix_type}.npz"
+    dep_label = "_dep" if deprojection else ""
+    coupling_fname = f"{out_dir}/inv_coupling{tf_label}{pure_label}{dep_label}_{pix_type}.npz"
 
-    if os.path.isfile(coupling_fname) and not overwrite_coupling:
+    '''if os.path.isfile(coupling_fname) and not overwrite_coupling:
         inv_coupling = np.load(coupling_fname)["inv_coupling"]
         if not return_bp_win:
             return inv_coupling
@@ -110,7 +111,7 @@ def get_inv_coupling(mask, nmt_bins, transfer=None, nmt_purify=False,
                 bp_win = np.load(coupling_fname)["bp_win"]
                 return inv_coupling, bp_win
             except KeyError:
-                pass
+                pass'''
 
     lmax = nmt_bins.lmax if lmax_mask is None else lmax_mask
     nl = lmax + 1
@@ -160,12 +161,12 @@ def get_inv_coupling(mask, nmt_bins, transfer=None, nmt_purify=False,
 print("  0. Reading inputs")
 
 # pixelization related
-nside = 256
-pix_type = "car"  # "hp"
+nside = 128
+pix_type = "hp"
 pix_lab = "car" if pix_type == "car" else f"nside{nside}"
 res_arcmin = 20
-car_template = "/shared_home/kwolz/bbdev/bb-awg-scripts/pipeline/simpure/data/band_car_fejer1_20arcmin.fits"  # "/home/kw6905/bbdev/bb-awg-scripts/pipeline/simpure/band_car_fejer1_20arcmin.fits"  # noqa
-beam_fwhm = 30
+car_template = None#"/shared_home/kwolz/bbdev/bb-awg-scripts/pipeline/simpure/data/band_car_fejer1_20arcmin.fits"  # "/home/kw6905/bbdev/bb-awg-scripts/pipeline/simpure/band_car_fejer1_20arcmin.fits"  # noqa
+beam_fwhm = 60
 
 if pix_type == "car":
     if car_template is not None:
@@ -217,25 +218,28 @@ cosmo = {
 _, clth = get_theory_cls(cosmo, lmax=lmax_sim, beam_fwhm=beam_fwhm)
 
 # general
-nsims_purify = 300  # number of pure-E sims used for template deprojection
+nsims_purify = 800  # number of pure-E sims used for template deprojection
 nsims_cmb = 100  # number of validation sims
 nsims_transfer = 50  # number of (pureE, pureB) sims used for transfer function
 id_sim_transfer_start = 0
 
+deproject_null = False  # Deproject null vector instead of pureB template.
 apo_scale = 10
 apo_type = "C1"
 lmax = lmax//4
-filter_setup = "butter4_20251007"
-out_dir = f"/cephfs/soukdata/user_data/kwolz/simpure/purification/{filter_setup}_thresh20percent"  # noqa
+filter_setup = "bbmaster_obsmat_DEPSIMS_ARE_POWERLAW"
+if not deproject_null:
+    out_dir = f"/home/matiasmv/SimonsObs/simpure_data/simpure_outputs/{filter_setup}/Ncmb{nsims_cmb}_Ntf{nsims_transfer}_Ndep{nsims_purify}" # noqa
+else:
+    out_dir = f"/home/matiasmv/SimonsObs/simpure_data/simpure_outputs/{filter_setup}/Ncmb{nsims_cmb}_Ntf{nsims_transfer}_NULLdep" # noqa
 plot_dir = f"{out_dir}/plots"
 os.makedirs(plot_dir, exist_ok=True)
 lmax_plot = 300
-overwrite = False  # If True, always recompute products.
-deproject_null = True  # Deproject null vector instead of pureB template.
+overwrite = True  # If True, always recompute products.
 ignore_filtering = False  # If True, only check mask-based purification.
 
 # apodized mask
-mask_file = f"/cephfs/soukdata/user_data/kwolz/simpure/filtered_pure_sims/satp3/f090/{filter_setup}/mask_thresh20percent/masks/analysis_mask_apo10_C1_car.fits"  # noqa
+mask_file = "/home/matiasmv/SimonsObs/simpure_data/simpure_inputs/mask_apo_nside128.fits"  # noqa
 mask = mu.read_map(mask_file,
                    pix_type=pix_type,
                    car_template=car_template)
@@ -278,9 +282,9 @@ def get_masked_map(mask, mp, nmt_purify=False, pix_type=None):
 def load_cmb_sim(sim_id, filtered=False, pols_keep="EB"):
     """
     """
-    base_dir = "/cephfs/soukdata/user_data/kwolz/simpure"
+    base_dir = "/home/matiasmv/SimonsObs/simpure_data/simpure_inputs"
     suffix = "_f090_science_filtered" if filtered else ""
-    sim_dir = f"filtered_cmb_sims/satp3/f090/{filter_setup}/coadded_sims"
+    sim_dir = f"filtered_cmb_sims"
     if not filtered:
         sim_dir = "cmb_sims"
     res_str = "20arcmin" if pix_type == "car" else f"nside{nside}"  # add by hand. TODO: generalize  # noqa
@@ -300,9 +304,9 @@ def load_transfer_sim(sim_id, filtered=False, type=None):
     """
     """
     assert type in [f"pure{p}" for p in "TEB"], "Invalid pure type"
-    base_dir = "/cephfs/soukdata/user_data/kwolz/simpure"
+    base_dir = "/home/matiasmv/SimonsObs/simpure_data/simpure_inputs"
     suffix = "_f090_science_filtered" if filtered else ""
-    sim_dir = f"filtered_pure_sims/satp3/f090/{filter_setup}/coadded_sims"  # noqa
+    sim_dir = f"filtered_pure_sims"  # noqa
     if not filtered:
         sim_dir = "input_sims"
     res_str = "20.0arcmin" if pix_type == "car" else f"nside{nside}"  # add by hand. TODO: generalize  # noqa
@@ -327,7 +331,8 @@ def load_purification_sim(sim_id, filtered=False):
 
 def compute_pspec(map, mask, nmt_bins, transfer=None, nmt_purify=False,
                   map2=None, wcs=None, return_just_fields=False,
-                  nmt_purify_mcm=None, masked_on_input=False):
+                  nmt_purify_mcm=None, masked_on_input=False,
+                  deprojection=False):
     """
     """
     lmax = nmt_bins.lmax
@@ -355,7 +360,7 @@ def compute_pspec(map, mask, nmt_bins, transfer=None, nmt_purify=False,
         nmt_purify_mcm = nmt_purify
     inv_coupling = get_inv_coupling(
         mask, nmt_bins, transfer=transfer, nmt_purify=nmt_purify_mcm, wcs=wcs
-    )
+    ,deprojection=deprojection)
 
     return pu.decouple_pseudo_cls(pcls, inv_coupling)
 
@@ -543,7 +548,7 @@ if not ignore_filtering:
         np.savez(fname, cls=cls_tf_unfiltered_nopure)
 
     print("  2B. TF sims unfiltered w/ purification")
-    fname = out_dir + "/cls_tf_unfiltered_pure_nsims{nsims_transfer}.npz"
+    fname = out_dir + f"/cls_tf_unfiltered_pure_nsims{nsims_transfer}.npz"
     if os.path.isfile(fname) and not overwrite:
         cls_tf_unfiltered_pure = np.load(fname, allow_pickle=True)["cls"]
     else:
@@ -567,7 +572,7 @@ if not ignore_filtering:
         np.savez(fname, cls=cls_tf_unfiltered_pure)
 
     print("  2C. TF sims filtered w/o purification")
-    fname = out_dir + "/cls_tf_filtered_nopure_nsims{nsims_transfer}.npz"
+    fname = out_dir + f"/cls_tf_filtered_nopure_nsims{nsims_transfer}.npz"
     if os.path.isfile(fname) and not overwrite:
         cls_tf_filtered_nopure = np.load(fname, allow_pickle=True)["cls"]
     else:
@@ -591,7 +596,7 @@ if not ignore_filtering:
         np.savez(fname, cls=cls_tf_filtered_nopure)
 
     print("  2D. TF sims filtered w/ purification")
-    fname = out_dir + "/cls_tf_filtered_pure_nsims{nsims_transfer}.npz"
+    fname = out_dir + f"/cls_tf_filtered_pure_nsims{nsims_transfer}.npz"
     if os.path.isfile(fname) and not overwrite:
         cls_tf_filtered_pure = np.load(fname, allow_pickle=True)["cls"]
     else:
@@ -605,7 +610,7 @@ if not ignore_filtering:
                 mp = load_transfer_sim(i, filtered=True, type=typ)  # noqa
                 f1, f2 = compute_pspec(
                     mp, mask, nmt_bins, nmt_purify=True,
-                    wcs=wcs, return_just_fields=True
+                    wcs=wcs, return_just_fields=True, deprojection=True
                 )
                 fields[typ] = f1
                 fields2[typ] = f2
@@ -633,7 +638,7 @@ if not ignore_filtering:
                 f1, f2 = compute_pspec(
                     mp_masked_dep, mask, nmt_bins, wcs=wcs,
                     return_just_fields=True,
-                    masked_on_input=True
+                    masked_on_input=True, deprojection=True
                 )
                 fields[typ] = f1
                 fields2[typ] = f2
@@ -706,7 +711,7 @@ if not ignore_filtering:
     )
     _, bpw_fil_pure_dep = get_inv_coupling(
         mask, nmt_bins, transfer=transfer_pure_dep["full_tf"], nmt_purify=True,
-        wcs=wcs, return_bp_win=True, overwrite_coupling=True
+        wcs=wcs, return_bp_win=True, overwrite_coupling=True , deprojection=True
     )
 
 clth_msk_nopure = pu.bin_theory_cls(clth, bpw_msk_nopure)
@@ -980,7 +985,7 @@ if not ignore_filtering:
                 mp_masked_dep, mask, nmt_bins,
                 transfer=None,
                 nmt_purify=False, nmt_purify_mcm=True,
-                wcs=wcs
+                wcs=wcs, deprojection=True
             )
             cls_filtered_pure_dep.append(cl)
 
@@ -1003,7 +1008,7 @@ if not ignore_filtering:
                 mp_masked_dep, mask, nmt_bins,
                 transfer=transfer_pure_dep["full_tf"],
                 nmt_purify=False, nmt_purify_mcm=True,
-                wcs=wcs, masked_on_input=True
+                wcs=wcs, masked_on_input=True, deprojection=True
             )
             cls_filtered_pure_dep_tfed.append(cl)
 

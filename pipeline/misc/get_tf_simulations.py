@@ -120,7 +120,8 @@ def main(args):
     id_sims_start = args.id_sims_start
     smooth_fwhm = args.smooth_fwhm
     nside = args.nside
-    do_plot = not args.no_plots
+    dep = args.deprojection
+    # do_plot = not args.no_plots
 
     out_dir = args.out_dir
     if not os.path.isdir(out_dir):
@@ -152,15 +153,19 @@ def main(args):
     ps = 1 / (ells + 10) ** 2
     fl = bandlim_sine2(ells, 650, 50)
 
+    pureX = ["pureE"] if dep else ["pureT", "pureE", "pureB"]
     for id_sim in range(id_sims_start, id_sims_start+n_sims):
 
         np.random.seed(id_sim)
         alms = hp.synalm(ps, lmax=lmax_sim)
         alms = hp.almxfl(alms, fl)
 
-        for i, tag in enumerate(["pureT", "pureE", "pureB"]):
+        for i, tag in enumerate(pureX):
             alms_list = np.zeros((3, *alms.shape), dtype=np.complex64)
-            alms_list[i, :] += alms
+            if not dep:
+                alms_list[i, :] += alms
+            else:            
+                alms_list[1, :] += alms
 
             if pix_type == "hp":
                 map = hp.alm2map(
@@ -197,6 +202,10 @@ def main(args):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--deprojection" ,
+        help='Boolean to generate only pure E'
+    )
     parser.add_argument(
         "--pix_type",
         help="Pixelization type, either 'hp' or 'car'."
