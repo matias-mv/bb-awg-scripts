@@ -610,7 +610,7 @@ if not ignore_filtering:
                 mp = load_transfer_sim(i, filtered=True, type=typ)  # noqa
                 f1, f2 = compute_pspec(
                     mp, mask, nmt_bins, nmt_purify=True,
-                    wcs=wcs, return_just_fields=True, deprojection=True
+                    wcs=wcs, return_just_fields=True
                 )
                 fields[typ] = f1
                 fields2[typ] = f2
